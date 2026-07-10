@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Everlight — Simulateur de Communauté Énergétique Locale</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; width: 100%; height: 280px; }
+        @keyframes pulse-flow {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+        .flow-arrow { animation: pulse-flow 2s infinite ease-in-out; }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 9999px;
+            background: #334155;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px; border-radius: 9999px;
+            background: currentColor;
+            border: 3px solid #0f172a;
+            cursor: pointer;
+            box-shadow: 0 0 0 2px currentColor;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px; height: 18px; border-radius: 9999px;
+            background: currentColor;
+            border: 3px solid #0f172a;
+            cursor: pointer;
+        }
+        .fade-bar { transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+    </style>
+</head>
+<body class="bg-slate-900 text-white">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-6xl">
+
+        <header class="text-center py-10">
+            <h1 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#00A6FB] to-[#FDC500]">
+                EVERLIGHT
+            </h1>
+            <p class="text-xl font-bold text-slate-400 mt-1 tracking-wider">COMMUNAUTÉ D'ÉNERGIE LOCALE À EVERE</p>
+            <p class="mt-4 text-base text-slate-300 max-w-3xl mx-auto">
+                Simulateur interactif : ajustez la production solaire et les consommations pour visualiser le circuit court de l'énergie entre un citoyen producteur et une entreprise voisine.
+            </p>
+        </header>
+
+        <!-- ============ SIMULATION CONTROLS ============ -->
+        <section id="controls" class="bg-slate-800/40 p-5 md:p-6 rounded-2xl border border-slate-700 mb-8">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1 text-center">Simulation centrée sur l'entreprise</h3>
+            <p class="text-[11px] text-slate-500 text-center mb-5">Le profil horaire garde exactement la même forme — seule la puissance totale change.</p>
+
+            <div class="flex flex-wrap justify-center gap-3 mb-2">
+                <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-700 rounded-full px-4 py-1.5 text-xs">
+                    <span>☀️</span>
+                    <span class="text-slate-400">PV fixe (par maison) :</span>
+                    <span class="font-mono font-semibold text-[#FDC500]">4.0 kWc</span>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-700 rounded-full px-4 py-1.5 text-xs">
+                    <span>🏠</span>
+                    <span class="text-slate-400">Résidentiel fixe (par maison) :</span>
+                    <span class="font-mono font-semibold text-[#F37748]">10.0 kWh/j</span>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-900/50 border border-slate-700 rounded-full px-4 py-1.5 text-xs">
+                    <span>👥</span>
+                    <span class="text-slate-400">Membres producteurs :</span>
+                    <span class="font-mono font-semibold text-slate-200">2 (mêmes hypothèses)</span>
+                </div>
+            </div>
+            <p class="text-[10px] text-slate-500 text-center mb-6">Production solaire annualisée pour Bruxelles, orientation sud (~950 kWh/kWc/an) — la courbe représente une journée moyenne sur l'année, hiver et nébulosité compris, pas une journée d'été idéale.</p>
+
+            <div class="max-w-xl mx-auto">
+                <div class="flex justify-between text-sm mb-2">
+                    <label for="businessSlider" class="font-semibold text-[#E83F6F]">🏢 Consommation de l'industrie / jour</label>
+                    <span id="businessSliderValue" class="font-mono text-slate-200 text-base">55 kWh/j</span>
+                </div>
+                <input type="range" id="businessSlider" min="20" max="150" step="1" value="55" class="w-full text-[#E83F6F]">
+                <div class="flex justify-between text-[10px] text-slate-500 mt-1"><span>20 kWh/j (petite structure)</span><span>150 kWh/j (grand site)</span></div>
+            </div>
+        </section>
+
+        <!-- ============ KPI CARDS ============ -->
+        <section id="kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center mb-10">
+            <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                <p class="text-xs uppercase tracking-wider text-slate-400">Production Solaire</p>
+                <p id="total-pv" class="text-2xl font-bold text-[#FDC500] mt-1">0 kWh</p>
+            </div>
+            <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                <p class="text-xs uppercase tracking-wider text-slate-400">Énergie Partagée via CEL</p>
+                <p id="total-shared" class="text-2xl font-bold text-[#FDC500] mt-1">0 kWh</p>
+            </div>
+            <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                <p class="text-xs uppercase tracking-wider text-slate-400">Conso Résidentielle</p>
+                <p id="total-home" class="text-2xl font-bold text-[#F37748] mt-1">0 kWh</p>
+            </div>
+            <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                <p class="text-xs uppercase tracking-wider text-slate-400">Conso Entreprise</p>
+                <p id="total-business" class="text-2xl font-bold text-[#E83F6F] mt-1">0 kWh</p>
+            </div>
+        </section>
+
+        <!-- ============ FLOW DIAGRAM ============ -->
+        <section id="flow-diagram" class="bg-slate-800/40 rounded-2xl border border-slate-700 p-6 md:p-8 mb-4 flex flex-col items-center">
+
+            <div class="flex flex-wrap justify-center gap-10 md:gap-16 mb-2">
+                <div class="flex flex-col items-center">
+                    <div class="text-3xl mb-1">☀️🏠</div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">Maison 1</p>
+                    <p id="flow-pv1" class="text-base font-bold text-[#FDC500]">0.0 kWh</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5">surplus <span id="flow-surplus1" class="font-semibold text-[#FDC500]">0.0 kWh</span></p>
+                </div>
+                <div class="flex flex-col items-center">
+                    <div class="text-3xl mb-1">☀️🏠</div>
+                    <p class="text-xs uppercase tracking-wider text-slate-400">Maison 2</p>
+                    <p id="flow-pv2" class="text-base font-bold text-[#A78BFA]">0.0 kWh</p>
+                    <p class="text-[11px] text-slate-500 mt-0.5">surplus <span id="flow-surplus2" class="font-semibold text-[#A78BFA]">0.0 kWh</span></p>
+                </div>
+            </div>
+
+            <div class="h-6 w-px bg-slate-600 my-1"></div>
+
+            <div class="w-full max-w-md h-3 relative my-3">
+                <div class="absolute inset-0 rounded-full bg-gradient-to-r from-[#00A6FB] to-[#FDC500] flow-arrow"></div>
+            </div>
+
+            <div class="relative p-5 rounded-full bg-gradient-to-br from-[#00A6FB] to-[#FDC500] shadow-lg shadow-sky-500/20 flex items-center justify-center w-20 h-20 shrink-0">
+                <div class="absolute inset-1 bg-slate-900 rounded-full flex flex-col items-center justify-center">
+                    <span class="text-sky-400 font-black text-[10px] tracking-tighter">EVER</span>
+                    <span class="text-[#FDC500] font-black text-[10px] tracking-widest -mt-1">LIGHT</span>
+                </div>
+            </div>
+
+            <div class="w-full max-w-md h-3 relative my-3">
+                <div class="absolute inset-0 rounded-full bg-gradient-to-r from-[#22B2DA] to-[#E83F6F] flow-arrow"></div>
+            </div>
+
+            <p class="text-lg font-bold text-[#22B2DA]" id="flow-shared">0.0 kWh</p>
+            <p class="text-xs uppercase tracking-wider text-slate-400">Utilisé directement par l'entreprise</p>
+            <div class="text-3xl mt-1 mb-1">🏢</div>
+            <p id="flow-business" class="text-xl font-bold text-[#E83F6F]">0.0 kWh</p>
+            <p class="text-xs uppercase tracking-wider text-slate-400">Consommation entreprise</p>
+        </section>
+
+        <!-- ============ BIG INDICATOR ============ -->
+        <section id="big-indicator" class="text-center py-6 mb-10">
+            <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">Aujourd'hui</p>
+            <p id="big-percentage" class="text-6xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#FDC500] to-[#22B2DA]">0%</p>
+            <p class="text-slate-300 mt-2 max-w-md mx-auto text-sm md:text-base">de la consommation de l'entreprise est couverte par l'énergie partagée du voisin.</p>
+        </section>
+
+        <!-- ============ CHARTS ============ -->
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch mb-6">
+            <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="p-2 bg-[#FDC500]/10 rounded-lg text-[#FDC500]">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        </span>
+                        <h2 class="text-xl font-bold">Le Profil de Production</h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">
+                        🟡 Production PV (2 maisons) · 🟠 Consommation résidentielle (2 maisons) · 🔵 Surplus total injecté.
+                    </p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="homeProfileChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="p-2 bg-[#E83F6F]/10 rounded-lg text-[#E83F6F]">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                        </span>
+                        <h2 class="text-xl font-bold">La Demande de l'Entreprise</h2>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">
+                        🟡 Maison 1 · 🟣 Maison 2 (énergie partagée via Everlight) · 🔴 Réseau national. Surfaces pleines pour une lecture instantanée.
+                    </p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="impactChart"></canvas>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============ NARRATIVE ============ -->
+        <section id="narrative" class="bg-slate-800/30 border border-slate-700/60 rounded-2xl p-6 mb-10">
+            <p id="narrative-text" class="text-sm md:text-base text-slate-300 leading-relaxed"></p>
+        </section>
+
+        <!-- ============ AVANT / APRES ============ -->
+        <section id="before-after" class="mb-10">
+            <h2 class="text-2xl font-bold text-center mb-2 text-transparent bg-clip-text bg-gradient-to-r from-[#00A6FB] to-[#FDC500]">Avant / Après Everlight — Entreprise</h2>
+            <p class="text-center text-[11px] text-slate-500 mb-6">Estimation sur base annuelle (365 jours), à partir du profil horaire simulé.</p>
+            <div class="max-w-xl mx-auto bg-slate-800/40 p-6 rounded-2xl border border-slate-700">
+                <div class="text-center mb-6">
+                    <p class="text-xs uppercase tracking-widest text-slate-400 mb-1">Économie annuelle estimée</p>
+                    <p id="ba-annual-savings" class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#FDC500] to-[#22B2DA]">0 €</p>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Sans CEL (100% réseau)</span><span id="ba-business-before" class="font-semibold text-slate-300">0 €/an</span></div>
+                        <div class="h-4 bg-slate-700/60 rounded-full overflow-hidden"><div id="ba-business-before-bar" class="fade-bar h-full bg-slate-500 rounded-full" style="width:0%"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span class="text-slate-400">Avec CEL</span><span id="ba-business-after" class="font-semibold text-[#22B2DA]">0 €/an</span></div>
+                        <div class="h-4 bg-slate-700/60 rounded-full overflow-hidden"><div id="ba-business-after-bar" class="fade-bar h-full bg-gradient-to-r from-[#22B2DA] to-[#FDC500] rounded-full" style="width:0%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ CO2 IMPACT ============ -->
+        <section id="co2" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+            <div class="bg-slate-800/40 p-5 rounded-xl border border-slate-700 text-center">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">CO₂ évité (aujourd'hui)</p>
+                <p id="co2-avoided" class="text-3xl font-bold text-emerald-400">0.0 kg</p>
+            </div>
+            <div class="bg-slate-800/40 p-5 rounded-xl border border-slate-700 text-center">
+                <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Équivalent</p>
+                <p id="co2-km" class="text-3xl font-bold text-emerald-300">0 km</p>
+                <p class="text-[11px] text-slate-500 mt-1">parcourus en voiture</p>
+            </div>
+            <p class="md:col-span-2 text-[11px] text-slate-500 text-center">Estimation indicative basée sur une intensité carbone moyenne du réseau de ≈170 g CO₂/kWh et une émission moyenne de ≈190 g CO₂/km.</p>
+        </section>
+
+        <!-- ============ FINANCIAL DETAIL CARDS ============ -->
+        <section id="financial-impact" class="mb-12">
+            <h2 class="text-2xl font-bold text-center mb-6 text-transparent bg-clip-text bg-gradient-to-r from-[#00A6FB] to-[#FDC500]">Détail de l'Impact Financier — Entreprise</h2>
+            <div class="max-w-xl mx-auto">
+
+                <div class="bg-slate-800/40 p-5 rounded-xl border border-slate-700">
+                    <h3 class="text-lg font-semibold mb-3 text-[#E83F6F]">Impact Économique Consommateur (par jour)</h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between"><span class="text-slate-400">Énergie Achetée (Réseau):</span> <span id="business-energy-purchased" class="font-semibold text-[#E83F6F]">0 kWh</span></div>
+                        <div class="flex justify-between"><span class="text-slate-400">Coût Énergie Réseau:</span> <span id="business-cost-purchased" class="font-semibold text-[#E83F6F]">0.00 EUR</span></div>
+                        <div class="flex justify-between"><span class="text-slate-400">Énergie Communauté (PV):</span> <span id="business-pv-shared" class="font-semibold text-[#FDC500]">0 kWh</span></div>
+                        <div class="flex justify-between border-b border-slate-700/50 pb-2"><span class="text-slate-400">Coût Énergie Communauté:</span> <span id="business-cost-shared" class="font-semibold text-[#FDC500]">0.00 EUR</span></div>
+                        <div class="flex justify-between pt-1 text-slate-400"><span>Coût Potentiel (100% Réseau):</span> <span id="business-potential-cost-no-community" class="font-semibold line-through">0.00 EUR</span></div>
+                        <div class="flex justify-between border-t border-slate-700 pt-2 mt-2 font-bold text-base">
+                            <span>Facture Totale Énergie:</span> <span id="business-total-impact" class="text-[#00A6FB]">0.00 EUR</span>
+                        </div>
+                        <div class="flex justify-between font-bold text-sm">
+                            <span class="text-slate-300">Économies Estimées:</span> <span id="business-savings-percentage" class="text-[#FDC500]">0.00%</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <footer class="text-center text-slate-500 text-xs py-4 border-t border-slate-800">
+            <p>Infographie interactive Everlight — simulateur alimenté par des profils horaires synchronisés.</p>
+        </footer>
+
+    </div>
+
+    <script>
+    (function () {
+        "use strict";
+
+        const originalHomeConsumption = [0.3, 0.2, 0.2, 0.2, 0.3, 0.5, 1.5, 2.0, 1.0, 0.8, 0.7, 0.6, 0.6, 0.7, 0.8, 1.0, 1.5, 2.5, 3.0, 2.0, 1.5, 1.0, 0.5, 0.4];
+        const originalPVGeneration   = [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 2.0, 4.0, 5.0, 5.5, 6.0, 5.8, 5.0, 4.0, 3.0, 2.0, 1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        const originalBusinessConsumption = [0.2, 0.1, 0.1, 0.1, 0.2, 0.7, 1.7, 2.7, 3.3, 4.0, 5.0, 5.0, 4.7, 4.0, 3.3, 2.7, 2.0, 1.3, 1.0, 0.7, 0.5, 0.3, 0.3, 0.2];
+
+        function sum(arr) { return arr.reduce((a, b) => a + b, 0); }
+
+        const RAW_PV_SUM = sum(originalPVGeneration);
+        const RAW_HOME_SUM = sum(originalHomeConsumption);
+        const RAW_BUSINESS_SUM = sum(originalBusinessConsumption);
+
+        const RATES = {
+            homeBuy: 0.3693,
+            homeSellCommunity: 0.08,
+            businessBuyGrid: 0.3693,
+            businessBuyCommunity: 0.2174
+        };
+
+        const CO2_PER_KWH = 0.170;
+        const CO2_PER_KM = 0.190;
+        const DAYS_PER_YEAR = 365;
+
+        // Productible annuel réaliste pour Bruxelles, orientation sud, inclinaison ~35°
+        // (≈ 950-1000 kWh/kWc/an — PVGIS / Homegrade Brussels). Le profil horaire "type"
+        // ci-dessus (originalPVGeneration) sert uniquement de FORME relative ; son amplitude
+        // est recalée sur cette moyenne annualisée pour intégrer l'hiver et la nébulosité,
+        // plutôt que de représenter une seule belle journée d'été.
+        const PV_ANNUAL_YIELD_PER_KWP = 950; // kWh/kWc/an
+
+        // Puissances fixes (référence) — seule la consommation de l'industrie varie
+        const FIXED_PV_PEAK = 4.0;   // kWc
+        const FIXED_HOME_TOTAL = 10.0; // kWh/j
+
+        const businessSlider = document.getElementById('businessSlider');
+
+        let chart1, chart2;
+
+        function calculateProfiles(pvPeakKwp, homeTotal, businessTotal) {
+            // Production PV moyenne journalière annualisée (Bruxelles, sud)
+            const targetDailyPV = (pvPeakKwp * PV_ANNUAL_YIELD_PER_KWP) / DAYS_PER_YEAR;
+            const pvScale = targetDailyPV / RAW_PV_SUM;
+            const homeScale = homeTotal / RAW_HOME_SUM;
+            const businessScale = businessTotal / RAW_BUSINESS_SUM;
+
+            const hours = originalPVGeneration.map((_, i) => i);
+            const pv = originalPVGeneration.map(v => v * pvScale);
+            const home = originalHomeConsumption.map(v => v * homeScale);
+            const business = originalBusinessConsumption.map(v => v * businessScale);
+
+            return { hours, pv, home, business };
+        }
+
+        // Nombre de membres producteurs — mêmes hypothèses pour chacun (4 kWc, 10 kWh/j)
+        const NUM_PRODUCERS = 2;
+
+        function calculateEnergyFlows(profiles) {
+            // profiles.pv / profiles.home décrivent UNE maison ; les 2 maisons sont identiques
+            // (mêmes hypothèses), donc leur surplus se répartit ici toujours 50/50 — mais le
+            // calcul reste explicite par maison pour rester correct si les hypothèses divergent un jour.
+            const { pv, home, business } = profiles;
+            const homeSelfConsumed1 = [], homeInjection1 = [];
+            const homeSelfConsumed2 = [], homeInjection2 = [];
+            const usedFromHome1 = [], usedFromHome2 = [];
+            const totalInjection = [], businessNet = [];
+
+            for (let i = 0; i < pv.length; i++) {
+                const self1 = Math.min(pv[i], home[i]);
+                const inj1 = Math.max(0, pv[i] - home[i]);
+                // Maison 2 : mêmes hypothèses que la maison 1
+                const self2 = self1;
+                const inj2 = inj1;
+
+                const totalInj = inj1 + inj2;
+                const usedTotal = Math.min(totalInj, business[i]);
+                const share1 = totalInj > 0 ? usedTotal * (inj1 / totalInj) : 0;
+                const share2 = usedTotal - share1;
+                const bNet = business[i] - usedTotal;
+
+                homeSelfConsumed1.push(self1); homeInjection1.push(inj1);
+                homeSelfConsumed2.push(self2); homeInjection2.push(inj2);
+                usedFromHome1.push(share1); usedFromHome2.push(share2);
+                totalInjection.push(totalInj);
+                businessNet.push(bNet);
+            }
+
+            return {
+                homeSelfConsumed1, homeInjection1, homeSelfConsumed2, homeInjection2,
+                usedFromHome1, usedFromHome2, totalInjection, businessNet
+            };
+        }
+
+        function calculateFinancialImpact(profiles, flows) {
+            const totalBusinessConsumption = sum(profiles.business);
+
+            const businessEnergyFromGrid = sum(flows.businessNet);
+            const businessEnergyFromCommunity = sum(flows.usedFromHome1) + sum(flows.usedFromHome2);
+            const businessCostGrid = businessEnergyFromGrid * RATES.businessBuyGrid;
+            const businessCostCommunity = businessEnergyFromCommunity * RATES.businessBuyCommunity;
+            const businessTotalImpact = businessCostGrid + businessCostCommunity;
+            const businessCostWithoutCEL = totalBusinessConsumption * RATES.businessBuyGrid;
+            const businessSavingsPct = businessCostWithoutCEL > 0 ? ((businessCostWithoutCEL - businessTotalImpact) / businessCostWithoutCEL) * 100 : 0;
+            const businessSavingsEUR = businessCostWithoutCEL - businessTotalImpact;
+
+            return {
+                businessEnergyFromGrid, businessCostGrid, businessEnergyFromCommunity, businessCostCommunity,
+                businessTotalImpact, businessCostWithoutCEL, businessSavingsPct, businessSavingsEUR,
+                businessCostWithoutCELAnnual: businessCostWithoutCEL * DAYS_PER_YEAR,
+                businessTotalImpactAnnual: businessTotalImpact * DAYS_PER_YEAR,
+                businessSavingsEURAnnual: businessSavingsEUR * DAYS_PER_YEAR
+            };
+        }
+
+        function calculateCO2(flows) {
+            const usefulSolar = sum(flows.homeSelfConsumed1) + sum(flows.homeSelfConsumed2) + sum(flows.usedFromHome1) + sum(flows.usedFromHome2);
+            const co2Avoided = usefulSolar * CO2_PER_KWH;
+            const kmEquivalent = co2Avoided / CO2_PER_KM;
+            return { usefulSolar, co2Avoided, kmEquivalent };
+        }
+
+        function buildNarrative(profiles, flows, financial) {
+            const totalPV = sum(profiles.pv) * NUM_PRODUCERS;
+            const totalShared = sum(flows.usedFromHome1) + sum(flows.usedFromHome2);
+            const totalBusinessConsumption = sum(profiles.business);
+            const sharePercent = totalBusinessConsumption > 0 ? (totalShared / totalBusinessConsumption) * 100 : 0;
+
+            return `Aujourd'hui, les 2 installations photovoltaïques des membres producteurs produisent ${totalPV.toFixed(1)} kWh. ` +
+                   `Après avoir alimenté leurs logements, ${totalShared.toFixed(1)} kWh sont partagés avec la communauté Everlight. ` +
+                   `L'entreprise voisine couvre ainsi ${sharePercent.toFixed(0)} % de ses besoins grâce à une énergie produite localement, ` +
+                   `ce qui représente une économie annuelle estimée à ${Math.max(0, financial.businessSavingsEURAnnual).toFixed(0)} €.`;
+        }
+
+        function setText(id, value) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        }
+
+        function animateValue(id, endValue, decimals, suffix, duration) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            duration = duration || 600;
+            const startValue = parseFloat(el.dataset.rawValue || '0') || 0;
+            const startTime = performance.now();
+
+            function step(now) {
+                const progress = Math.min((now - startTime) / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const current = startValue + (endValue - startValue) * eased;
+                el.textContent = `${current.toFixed(decimals)}${suffix}`;
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    el.dataset.rawValue = String(endValue);
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        function updateSliderLabels(business) {
+            setText('businessSliderValue', `${business.toFixed(0)} kWh/j`);
+        }
+
+        function updateKPIs(profiles, flows) {
+            const totalShared = sum(flows.usedFromHome1) + sum(flows.usedFromHome2);
+            animateValue('total-pv', sum(profiles.pv) * NUM_PRODUCERS, 1, ' kWh');
+            animateValue('total-shared', totalShared, 1, ' kWh');
+            animateValue('total-home', sum(profiles.home) * NUM_PRODUCERS, 1, ' kWh');
+            animateValue('total-business', sum(profiles.business), 1, ' kWh');
+        }
+
+        function updateFlowDiagram(profiles, flows) {
+            const pvPerHouse = sum(profiles.pv);
+            animateValue('flow-pv1', pvPerHouse, 1, ' kWh');
+            animateValue('flow-pv2', pvPerHouse, 1, ' kWh');
+            animateValue('flow-surplus1', sum(flows.homeInjection1), 1, ' kWh');
+            animateValue('flow-surplus2', sum(flows.homeInjection2), 1, ' kWh');
+            animateValue('flow-shared', sum(flows.usedFromHome1) + sum(flows.usedFromHome2), 1, ' kWh');
+            animateValue('flow-business', sum(profiles.business), 1, ' kWh');
+        }
+
+        function updateBigIndicator(profiles, flows) {
+            const totalBusinessConsumption = sum(profiles.business);
+            const totalShared = sum(flows.usedFromHome1) + sum(flows.usedFromHome2);
+            const pct = totalBusinessConsumption > 0 ? (totalShared / totalBusinessConsumption) * 100 : 0;
+            animateValue('big-percentage', pct, 0, '%', 700);
+        }
+
+        function updateNarrativeText(text) {
+            setText('narrative-text', text);
+        }
+
+        function updateBeforeAfter(financial) {
+            const fmtEUR = (v) => Math.round(v).toLocaleString('fr-BE');
+
+            setText('ba-business-before', `${fmtEUR(financial.businessCostWithoutCELAnnual)} €/an`);
+            setText('ba-business-after', `${fmtEUR(financial.businessTotalImpactAnnual)} €/an`);
+            animateValue('ba-annual-savings', Math.max(0, financial.businessSavingsEURAnnual), 0, ' €', 700);
+
+            const businessMax = Math.max(financial.businessCostWithoutCELAnnual, financial.businessTotalImpactAnnual, 0.01);
+            const businessBeforeBar = document.getElementById('ba-business-before-bar');
+            const businessAfterBar = document.getElementById('ba-business-after-bar');
+
+            if (businessBeforeBar) businessBeforeBar.style.width = `${(financial.businessCostWithoutCELAnnual / businessMax) * 100}%`;
+            if (businessAfterBar) businessAfterBar.style.width = `${(Math.max(0, financial.businessTotalImpactAnnual) / businessMax) * 100}%`;
+        }
+
+        function updateCO2(co2) {
+            animateValue('co2-avoided', co2.co2Avoided, 1, ' kg');
+            animateValue('co2-km', co2.kmEquivalent, 0, ' km');
+        }
+
+        function updateFinancialCards(financial) {
+            setText('business-energy-purchased', `${financial.businessEnergyFromGrid.toFixed(1)} kWh`);
+            setText('business-cost-purchased', `${financial.businessCostGrid.toFixed(2)} €`);
+            setText('business-pv-shared', `${financial.businessEnergyFromCommunity.toFixed(1)} kWh`);
+            setText('business-cost-shared', `${financial.businessCostCommunity.toFixed(2)} €`);
+            setText('business-total-impact', `${financial.businessTotalImpact.toFixed(2)} €`);
+            setText('business-potential-cost-no-community', `${financial.businessCostWithoutCEL.toFixed(2)} €`);
+            setText('business-savings-percentage', `${financial.businessSavingsPct.toFixed(2)}%`);
+        }
+
+
+        function chartOptions(yTitle, stacked) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 500 },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#64748b', font: { size: 10 } } },
+                    y: {
+                        beginAtZero: true,
+                        stacked: !!stacked,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#64748b', font: { size: 10 } },
+                        title: { display: true, text: yTitle, color: '#64748b', font: { size: 10 } }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} kWh`
+                        }
+                    }
+                }
+            };
+        }
+
+        function createCharts(profiles, flows) {
+            const labels = profiles.hours.map(h => `${h}:00`);
+            const pvTotal = profiles.pv.map(v => v * NUM_PRODUCERS);
+            const homeTotal = profiles.home.map(v => v * NUM_PRODUCERS);
+
+            chart1 = new Chart(document.getElementById('homeProfileChart'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Production PV (2 maisons)', data: pvTotal, borderColor: '#FDC500', backgroundColor: '#FDC500', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: false },
+                        { label: 'Consommation résidentielle (2 maisons)', data: homeTotal, borderColor: '#F37748', backgroundColor: '#F37748', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: false },
+                        { label: 'Surplus total injecté', data: flows.totalInjection, borderColor: '#00A6FB', backgroundColor: 'rgba(0, 166, 251, 0.28)', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: 'origin' }
+                    ]
+                },
+                options: chartOptions('kW', false)
+            });
+
+            chart2 = new Chart(document.getElementById('impactChart'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Via Maison 1 (Everlight)', data: flows.usedFromHome1, borderColor: '#FDC500', backgroundColor: 'rgba(253, 197, 0, 0.55)', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: 'origin', stack: 'business' },
+                        { label: 'Via Maison 2 (Everlight)', data: flows.usedFromHome2, borderColor: '#A78BFA', backgroundColor: 'rgba(167, 139, 250, 0.55)', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: '-1', stack: 'business' },
+                        { label: 'Via Réseau National', data: flows.businessNet, borderColor: '#E83F6F', backgroundColor: 'rgba(232, 63, 111, 0.5)', tension: 0.3, pointRadius: 0, borderWidth: 2, fill: '-1', stack: 'business' }
+                    ]
+                },
+                options: chartOptions('kW', true)
+            });
+        }
+
+        function updateCharts(profiles, flows) {
+            const labels = profiles.hours.map(h => `${h}:00`);
+            const pvTotal = profiles.pv.map(v => v * NUM_PRODUCERS);
+            const homeTotal = profiles.home.map(v => v * NUM_PRODUCERS);
+
+            chart1.data.labels = labels;
+            chart1.data.datasets[0].data = pvTotal;
+            chart1.data.datasets[1].data = homeTotal;
+            chart1.data.datasets[2].data = flows.totalInjection;
+            chart1.update();
+
+            chart2.data.labels = labels;
+            chart2.data.datasets[0].data = flows.usedFromHome1;
+            chart2.data.datasets[1].data = flows.usedFromHome2;
+            chart2.data.datasets[2].data = flows.businessNet;
+            chart2.update();
+        }
+
+        function updateSimulation() {
+            const business = parseFloat(businessSlider.value);
+
+            updateSliderLabels(business);
+
+            const profiles = calculateProfiles(FIXED_PV_PEAK, FIXED_HOME_TOTAL, business);
+            const flows = calculateEnergyFlows(profiles);
+            const financial = calculateFinancialImpact(profiles, flows);
+            const co2 = calculateCO2(flows);
+
+            updateKPIs(profiles, flows);
+            updateFlowDiagram(profiles, flows);
+            updateBigIndicator(profiles, flows);
+
+            if (!chart1 || !chart2) {
+                createCharts(profiles, flows);
+            } else {
+                updateCharts(profiles, flows);
+            }
+
+            updateNarrativeText(buildNarrative(profiles, flows, financial));
+            updateBeforeAfter(financial);
+            updateCO2(co2);
+            updateFinancialCards(financial);
+        }
+
+        businessSlider.addEventListener('input', updateSimulation);
+
+        updateSimulation();
+    })();
+    </script>
+</body>
+</html>
